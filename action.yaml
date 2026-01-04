@@ -1,0 +1,56 @@
+name: Analyze Architecture diagram for Threats
+description: Analyzes Mermaid diagram text in provided input file using OpenAI API to generate a threat list.
+
+inputs:
+  host-repo-token:
+    description: 'Token to checkout the threatmodel-action repo'
+    required: true
+  architecture-file:
+    description: 'Path to the architecture md file containing Mermaid diagram text'
+    required: true
+  openai-api-key:
+    description: 'OpenAI API key for accessing the API'
+    required: true
+
+outputs:
+  threats-json:
+    description: 'Markdown string containing the threat list & mitigation recommendations'
+    value: ${{ steps.analyze.outputs.threats-json }}
+
+runs:
+  using: composite
+  steps:
+    # STEP 1 : Checkout code repository to copy execution scripts to Runner
+    - name: Checkout Threat model action repository
+      uses: actions/checkout@v4
+      with:
+        repository: philips-internal/threatmodel-action
+        ref: main
+        path: host-repo
+        token: ${{ inputs.host-repo-token }}
+
+    # STEP 2 : Install Python for script execution
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    # STEP 3 : Install dependencies required by the scripts
+    - name: Install dependencies
+      run: |
+        pip install langchain openai langchain_openai --break-system-packages
+      shell: bash
+
+    # STEP 4 : Execute threat modeling using LLMs
+    - name: Run Threat modeling script
+      id: analyze
+      run: |
+        python host-repo/src/analyze_architecture.py \
+          "${{ github.workspace }}/${{ inputs.architecture-file }}" \
+          "${{ inputs.openai-api-key }}"
+
+        # Capture the full Markdown output as a single multiline output
+        echo "threats-json<<EOF" >> $GITHUB_OUTPUT
+        cat threat_model.md               >> $GITHUB_OUTPUT
+        echo "EOF"                        >> $GITHUB_OUTPUT
+      shell: bash
